@@ -1,317 +1,300 @@
-# MVP Specification: AI Pipeline for Meal Recognition and Nutritional Estimation
+# MVP Diabetes Project - Nutrition Pipeline
 
-## 1. Objective
-Develop a modular AI system that estimates the nutritional composition of a meal from a single image.  
-The pipeline performs segmentation, classification, and nutrition retrieval, producing a structured nutritional summary in JSON format.
+AI-powered pipeline for meal recognition and nutritional estimation from images.
 
----
+## 🚀 Quick Start
 
-## 2. High-Level Pipeline
+### 1. Setup Environment
 
-```plaintext
-[ Input: Meal photo (.jpg/.png) ]
-    ↓
-[ Segmentation + Volume Estimation ]
-    ↓
-[ LLM-based Food Classification ]
-    ↓
-[ Nutrition Retrieval via Embedding Search ]
-    ↓
-[ Nutrient Aggregation + Final JSON Output ]
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd MVP-diabetes-project
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-Each component outputs structured JSON and can be executed independently.  
-Pipeline orchestration is handled by **LangGraph** or a similar graph-based workflow manager.
+### 2. Configure API Keys
 
----
+```bash
+# Copy environment template
+cp .env.example .env
 
-## 3. Component Specifications
-
-### 3.1 Segmentation + Volume Estimation
-
-**Input:**
-- `meal_image` (path or base64)
-
-**Output JSON Example:**
-```json
-[
-  {
-    "mask_id": 1,
-    "crop_image_path": "segments/1_chicken.png",
-    "volume_ml": 125.4
-  },
-  {
-    "mask_id": 2,
-    "crop_image_path": "segments/2_rice.png",
-    "volume_ml": 110.2
-  }
-]
+# Edit .env and add your OpenAI API key
+nano .env
 ```
 
-**Implementation Plan:**
-- Use `Mask2Former` (Detectron2) pretrained on COCO.
-- Fine-tune on food datasets: `UEC-FoodPix Complete`, `UNIMIB2016`, `FoodSeg103/154`.
-- Optionally add 150–300 Swedish meal samples annotated via **SAM (Segment Anything)**.
-- Estimate volume using:
-  - Pixel area + monocular depth (`MiDaS` or `DPT`), or  
-  - Scale reference (plate diameter / known object).
+### 3. Run the Pipeline
 
-**Dependencies:**
-- PyTorch, Detectron2, OpenCV, MiDaS, NumPy
+```bash
+# Analyze a meal image
+python main.py path/to/meal_image.jpg
 
----
+# With custom output directory
+python main.py path/to/meal_image.jpg -o results/my_meal
 
-### 3.2 LLM-Based Classification
-
-**Input:**
-- Segment crop image  
-- Optional text description (string)
-
-**Prompt Template:**
-```
-You are a food classifier.
-Input: [image] + [short description]
-Output JSON:
-{
-  "dish_name": "...",
-  "main_ingredients": [...],
-  "confidence": 0.0-1.0
-}
+# Verbose mode
+python main.py path/to/meal_image.jpg -v
 ```
 
-**Output Example:**
-```json
-{
-  "mask_id": 1,
-  "dish_name": "chicken with rice and broccoli",
-  "main_ingredients": ["chicken", "rice", "broccoli"],
-  "confidence": 0.94
-}
+## 📁 Project Structure
+
+```
+MVP-diabetes-project/
+├── src/
+│   ├── __init__.py              # Package initialization
+│   ├── segmenter.py             # Segmentation & volume estimation
+│   ├── classifier.py            # LLM-based classification
+│   ├── nutrition_search.py      # Embedding-based DB search
+│   ├── aggregator.py            # Nutrient aggregation
+│   ├── graph.py                 # Pipeline orchestration
+│   ├── utils.py                 # Utility functions
+│   └── models/                  # Model wrappers
+│       ├── segmentation_model.py
+│       ├── depth_model.py
+│       ├── classification_model.py
+│       └── embedding_model.py
+├── data/
+│   ├── raw/                     # Input images
+│   ├── processed/               # Processed outputs
+│   ├── embeddings/              # Cached embeddings
+│   └── db/                      # Nutrition databases (CSV)
+├── config/
+│   ├── settings.yaml            # Main configuration
+│   ├── densities.yaml           # Food density lookup
+│   └── prompt_templates/        # LLM prompts
+├── outputs/                     # Pipeline outputs
+├── tests/                       # Unit tests
+├── notebooks/                   # Jupyter notebooks
+├── main.py                      # CLI interface
+└── requirements.txt
 ```
 
-**Implementation Plan:**
-- Use GPT-4V (vision + JSON mode) or open-source equivalent (e.g., Llava, Qwen-VL).
-- Enforce structured output using JSON schema validation or function-calling constraints.
+## 🔧 Configuration
 
----
+Edit `config/settings.yaml` to customize:
 
-### 3.3 Nutrition Retrieval (Embedding Search)
+- Model selection (OpenAI vs local models)
+- Volume estimation method
+- Nutrition database sources
+- Logging settings
+- Pipeline parameters
 
-**Goal:** Map `dish_name` or `main_ingredients` to nutritional database entries.
+## 🎯 Usage Examples
 
-**Input Example:**
-```json
-{
-  "dish_name": "boiled rice",
-  "main_ingredients": ["rice"]
-}
+### Basic Usage
+
+```python
+from src import create_pipeline
+
+# Create pipeline
+pipeline = create_pipeline()
+
+# Analyze meal
+results = pipeline.run("meal_photo.jpg")
+
+# Access results
+print(f"Total calories: {results['total']['energy_kcal']:.0f} kcal")
+print(f"Protein: {results['total']['protein_g']:.1f}g")
 ```
 
-**Output Example:**
-```json
-{
-  "matched_food": "boiled rice",
-  "carbohydrates_per_100g": 28.0,
-  "protein_per_100g": 2.4,
-  "fat_per_100g": 0.3,
-  "match_score": 0.91
-}
+### Running Individual Nodes
+
+```bash
+# Run only segmentation
+python main.py meal.jpg --node segment
+
+# Resume from previous state
+python main.py meal.jpg --node classify --state outputs/run_xxx/pipeline_state.json
 ```
 
-**Implementation Plan:**
-- Encode text with `text-embedding-3-small` (OpenAI).
-- Perform nearest-neighbour search via FAISS or LanceDB.
-- Databases:
-  - Swedish Food Agency dataset
-  - USDA FoodData Central
-  - Open Food Facts
+### Using in Notebooks
 
-**Dependencies:**
-- FAISS, OpenAI API, Pandas, NumPy
+```python
+from src import SimplePipeline
 
----
-
-### 3.4 Nutrient Aggregation
-
-**Input:**
-- Segmentation output (volumes)
-- Nutrition data (per-100g)
-- Density lookup table (`ρ_i`)
-
-**Formula:**
-\[
-N_k = \sum_i \frac{\rho_i \, V_i}{100} \, C_{i,k}
-\]
-
-**Output JSON:**
-```json
-{
-  "meal": [
-    {"food": "chicken", "mass_g": 140, "protein_g": 42},
-    {"food": "rice", "mass_g": 120, "carbohydrates_g": 34},
-    {"food": "broccoli", "mass_g": 70, "carbohydrates_g": 3}
-  ],
-  "total": {
-    "carbohydrates_g": 37,
-    "protein_g": 44,
-    "fat_g": 6
-  },
-  "confidence": 0.88
-}
+pipeline = SimplePipeline()
+results = pipeline.analyze_meal("meal.jpg")
 ```
 
----
+## 📊 Output Format
 
-### 3.5 LangGraph Orchestration
-
-**Graph Structure:**
-```
-Segmenter → VolumeEstimator → LLMClassifier → VectorDBRetriever → Aggregator
-```
-
-**Execution Features:**
-- Each node reads/writes structured JSON.
-- Nodes can be run independently for debugging.
-- Logs pipeline trace with timestamps and intermediate results.
-
-**Dependencies:**
-- LangGraph, JSONSchema, Python logging
-
----
-
-## 4. Evaluation Metrics
-
-| Stage | Metric | Description |
-|-------|---------|-------------|
-| Segmentation | mIoU, mAP | Object-level accuracy |
-| Classification | Accuracy, semantic similarity | JSON-based or cosine similarity |
-| Volume Estimation | RMSE | Deviation from true volume |
-| Nutrition Estimation | MAE | Nutrient error (g or %) |
-
----
-
-## 5. Risks & Mitigations
-
-| Risk | Mitigation |
-|------|-------------|
-| Ambiguous dishes | Ingredient-level reasoning + user confirmation |
-| Scale uncertainty | Fiducial marker or monocular depth model |
-| LLM inconsistency | Function-calling schema enforcement |
-| Database mismatch | Vector similarity fallback |
-
----
-
-## 6. Deliverables (MVP Scope)
-
-| File | Purpose |
-|------|----------|
-| `segmenter.py` | Food segmentation & volume estimation |
-| `classifier.py` | LLM-based food classification |
-| `nutrition_search.py` | Embedding-based database retrieval |
-| `aggregator.py` | Nutrient computation and summary |
-| `graph.py` | LangGraph pipeline orchestration |
-| `demo_pipeline.ipynb` | End-to-end demo |
-| `outputs/example_output.json` | Sample result for validation |
-
----
-
-## 7. Example Full Pipeline Output
+The pipeline produces a JSON file with:
 
 ```json
 {
-  "input_image": "meal_001.jpg",
+  "input_image": "meal.jpg",
+  "timestamp": "2025-10-19T10:30:00",
   "segments": [
     {
-      "mask_id": 1,
-      "dish_name": "grilled chicken",
+      "mask_id": 0,
+      "dish_name": "grilled chicken breast",
       "volume_ml": 150.0,
-      "nutrition": {"protein_g": 40, "fat_g": 6},
-      "confidence": 0.9
-    },
-    {
-      "mask_id": 2,
-      "dish_name": "boiled rice",
-      "volume_ml": 120.0,
-      "nutrition": {"carbohydrates_g": 35, "protein_g": 3},
-      "confidence": 0.87
+      "mass_g": 142.5,
+      "nutrition": {
+        "carbohydrates_g": 0.0,
+        "protein_g": 42.0,
+        "fat_g": 3.5,
+        "energy_kcal": 195.0
+      },
+      "confidence": 0.92
     }
   ],
   "total": {
-    "carbohydrates_g": 35,
-    "protein_g": 43,
-    "fat_g": 6
+    "carbohydrates_g": 45.2,
+    "protein_g": 58.3,
+    "fat_g": 12.1,
+    "energy_kcal": 520.0,
+    "total_mass_g": 420.5
   },
-  "overall_confidence": 0.88
+  "overall_confidence": 0.88,
+  "macronutrient_ratios": {
+    "carbohydrates_percent": 34.8,
+    "protein_percent": 44.9,
+    "fat_percent": 20.3
+  },
+  "glycemic_estimate": {
+    "total_carbohydrates_g": 45.2,
+    "estimated_glycemic_load": 27.1,
+    "glycemic_impact": "medium"
+  }
 }
 ```
 
+## 🧪 Testing
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_segmenter.py -v
+
+# Run with coverage
+pytest tests/ --cov=src --cov-report=html
+```
+
+## 📝 Adding Nutrition Databases
+
+The pipeline expects CSV files in `data/db/` with this format:
+
+```csv
+food_name,carbohydrates_per_100g,protein_per_100g,fat_per_100g,energy_kcal_per_100g
+"Boiled Rice",28.0,2.7,0.3,130
+"Grilled Chicken Breast",0.0,31.0,3.6,165
+"Steamed Broccoli",7.0,2.8,0.4,35
+```
+
+Configure database sources in `config/settings.yaml`:
+
+```yaml
+nutrition_db:
+  sources:
+    - name: "swedish_food_agency"
+      path: "data/db/swedish_food_db.csv"
+      priority: 1
+    - name: "usda"
+      path: "data/db/usda_food_db.csv"
+      priority: 2
+```
+
+## 🔌 Model Implementation Status
+
+### ✅ Completed
+- Project structure and scaffolding
+- Configuration management
+- Pipeline orchestration framework
+- Utility functions
+- Model wrappers (interfaces)
+- CLI interface
+- Test structure
+
+### ⏳ To Be Implemented
+- [ ] Segmentation model (Mask2Former)
+- [ ] Depth estimation (MiDaS)
+- [ ] Classification model (GPT-4V or Llava)
+- [ ] Embedding model integration
+- [ ] Vector database setup (FAISS/LanceDB)
+- [ ] Fine-tuning on food datasets
+
+## 🎓 Next Steps
+
+### 1. Implement Segmentation Model
+
+```python
+# In src/models/segmentation_model.py
+def load_model(self):
+    from detectron2.config import get_cfg
+    from detectron2.engine import DefaultPredictor
+    
+    cfg = get_cfg()
+    cfg.merge_from_file(self.config.get("models.segmentation.config"))
+    cfg.MODEL.WEIGHTS = self.config.get("models.segmentation.weights")
+    cfg.MODEL.DEVICE = self.device
+    
+    self.predictor = DefaultPredictor(cfg)
+```
+
+### 2. Implement Classification Model
+
+```python
+# In src/models/classification_model.py
+def load_model(self):
+    from openai import OpenAI
+    
+    api_key = self.config.get("api_keys.openai")
+    self.client = OpenAI(api_key=api_key)
+```
+
+### 3. Setup Nutrition Databases
+
+- Download Swedish Food Agency database
+- Download USDA FoodData Central
+- Process and convert to standard CSV format
+- Generate embeddings for vector search
+
+### 4. Fine-tune Models (Optional)
+
+- Collect Swedish meal images
+- Annotate with SAM (Segment Anything)
+- Fine-tune Mask2Former on food data
+
+## 📚 Documentation
+
+- **MVP Specification**: See `mvp_spec.md` for detailed requirements
+- **API Documentation**: Generate with `pdoc src/`
+- **Configuration Guide**: See comments in `config/settings.yaml`
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 👤 Author
+
+**Fredrick Carlsåker**
+
+## 🙏 Acknowledgments
+
+- Detectron2 for segmentation models
+- OpenAI for GPT-4V and embeddings
+- Intel for MiDaS depth estimation
+- Swedish Food Agency for nutrition data
+
 ---
 
-## 8. Implementation Order
+**Status**: 🏗️ Under Development - Model implementations pending
 
-1. Build segmentation + volume estimation module  
-2. Implement LLM-based classification (JSON schema enforced)  
-3. Integrate embedding-based nutrition search  
-4. Implement nutrient aggregation logic  
-5. Connect modules with LangGraph  
-6. Add CLI or Jupyter interface for testing  
-
----
-
-## 9. File Structure
-
-MVP-diabetets-project/
-│
-├── src/
-│   ├── __init__.py
-│   ├── segmenter.py             # Step 1: segmentation + volume estimation
-│   ├── classifier.py            # Step 2: LLM-based food classification
-│   ├── nutrition_search.py      # Step 3: embedding + vector DB retrieval
-│   ├── aggregator.py            # Step 4: nutrient aggregation logic
-│   ├── graph.py                 # LangGraph orchestration pipeline
-│   └── utils.py                 # Shared functions (I/O, JSON schema, etc.)
-│
-├── data/
-│   ├── raw/                     # Sample meal images
-│   ├── processed/               # Segments, depth maps, etc.
-│   ├── embeddings/              # Vector DB or precomputed embeddings
-│   └── db/                      # Nutrition CSVs (Swedish Food Agency, USDA, etc.)
-│
-├── notebooks/
-│   ├── demo_pipeline.ipynb      # Run pipeline end-to-end in notebook
-│   └── evaluation.ipynb         # Evaluation + metrics testing
-│
-├── config/
-│   ├── settings.yaml            # Global paths, model parameters, API keys
-│   ├── prompt_templates/        # JSON or YAML LLM prompt schemas
-│   └── densities.yaml           # Food densities (for nutrient aggregation)
-│
-├── outputs/
-│   ├── logs/                    # Log files from runs
-│   ├── examples/                # JSON example outputs
-│   └── results.csv              # Aggregate evaluation results
-│
-├── tests/
-│   ├── test_segmenter.py
-│   ├── test_classifier.py
-│   └── test_aggregator.py
-│
-├── requirements.txt
-├── README.md
-└── mvp_spec.md
-
----
-
-## 10. Future Extensions
-
-- Depth-based 3D volume estimation  
-- Personalized nutrition tracking  
-- Glucose-level prediction  
-- Dietary recommendations based on history  
-
----
-
-**Author:** Fredrick Carlsåker  
-**Version:** 1.0  
-**Date:** 2025-10-19  
-
+For questions or issues, please open an issue on GitHub.
