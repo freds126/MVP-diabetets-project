@@ -258,7 +258,51 @@ Segmenter → VolumeEstimator → LLMClassifier → VectorDBRetriever → Aggreg
 
 ---
 
-## 9. Future Extensions
+## 9. File Structure
+
+MVP-diabetets-project/
+│
+├── src/
+│   ├── __init__.py
+│   ├── segmenter.py             # Step 1: segmentation + volume estimation
+│   ├── classifier.py            # Step 2: LLM-based food classification
+│   ├── nutrition_search.py      # Step 3: embedding + vector DB retrieval
+│   ├── aggregator.py            # Step 4: nutrient aggregation logic
+│   ├── graph.py                 # LangGraph orchestration pipeline
+│   └── utils.py                 # Shared functions (I/O, JSON schema, etc.)
+│
+├── data/
+│   ├── raw/                     # Sample meal images
+│   ├── processed/               # Segments, depth maps, etc.
+│   ├── embeddings/              # Vector DB or precomputed embeddings
+│   └── db/                      # Nutrition CSVs (Swedish Food Agency, USDA, etc.)
+│
+├── notebooks/
+│   ├── demo_pipeline.ipynb      # Run pipeline end-to-end in notebook
+│   └── evaluation.ipynb         # Evaluation + metrics testing
+│
+├── config/
+│   ├── settings.yaml            # Global paths, model parameters, API keys
+│   ├── prompt_templates/        # JSON or YAML LLM prompt schemas
+│   └── densities.yaml           # Food densities (for nutrient aggregation)
+│
+├── outputs/
+│   ├── logs/                    # Log files from runs
+│   ├── examples/                # JSON example outputs
+│   └── results.csv              # Aggregate evaluation results
+│
+├── tests/
+│   ├── test_segmenter.py
+│   ├── test_classifier.py
+│   └── test_aggregator.py
+│
+├── requirements.txt
+├── README.md
+└── mvp_spec.md
+
+---
+
+## 10. Future Extensions
 
 - Depth-based 3D volume estimation  
 - Personalized nutrition tracking  
@@ -270,24 +314,4 @@ Segmenter → VolumeEstimator → LLMClassifier → VectorDBRetriever → Aggreg
 **Author:** Fredrick Carlsåker  
 **Version:** 1.0  
 **Date:** 2025-10-19  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
